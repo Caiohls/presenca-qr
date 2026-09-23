@@ -26,6 +26,11 @@
 
   document.getElementById('btn-demo').addEventListener('click', async () => {
     if (!confirm('Isso substitui os registros de leitura atuais pelos de exemplo. Continuar?')) return;
+    await carregarExemplo();
+    alert('Dados de exemplo carregados.');
+  });
+
+  async function carregarExemplo() {
     await DB.limpar('registros');
     const nomes = [
       ['202210001', 'Ana Beatriz Souza', 'Engenharia de Computação'],
@@ -49,7 +54,13 @@
       ra, evento, entrada: atras(e), saida: s == null ? null : atras(s),
     })));
     await atualizarTudo();
-    alert('Dados de exemplo carregados.');
+  }
+
+  const dlgDemo = document.getElementById('dlg-demo');
+  document.getElementById('dlg-demo-nao').addEventListener('click', () => dlgDemo.close());
+  document.getElementById('dlg-demo-sim').addEventListener('click', async () => {
+    dlgDemo.close();
+    await carregarExemplo();
   });
 
   document.getElementById('btn-backup').addEventListener('click', async () => {
@@ -95,4 +106,5 @@
   Relatorio.iniciar();
   aplicarConfig();
   await atualizarTudo();
+  if (!Alunos.lista.length) dlgDemo.showModal();
 })();
