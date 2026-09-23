@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Presença QR | USF</title>
+  <meta name="description" content="Protótipo de controle de presença por QR Code para atividades acadêmicas.">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div>
+        <h1>Presença QR</h1>
+        <p class="sub" id="evento-label">Evento</p>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="leitura" class="active">Leitura</button>
+      <button role="tab" data-tab="alunos">Alunos</button>
+      <button role="tab" data-tab="relatorio">Relatório</button>
+      <button role="tab" data-tab="config">Configurações</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="tab-leitura" class="tab active">
+      <div class="grid-2">
+        <div class="card">
+          <h2>Leitor</h2>
+          <div id="reader" class="reader"></div>
+          <div class="row">
+            <button id="btn-camera" class="btn primary">Ligar câmera</button>
+            <button id="btn-camera-stop" class="btn" hidden>Desligar</button>
+          </div>
+          <form id="form-manual" class="row">
+            <input id="manual-code" placeholder="Digite o RA ou use leitor USB" autocomplete="off" inputmode="numeric">
+            <button class="btn">Registrar</button>
+          </form>
+        </div>
+        <div class="card">
+          <h2>Última leitura</h2>
+          <div id="feedback" class="feedback idle">
+            <div class="fb-title">Aguardando leitura</div>
+            <div class="fb-detail">Aponte o QR Code do aluno para a câmera.</div>
+          </div>
+          <div class="stats">
+            <div><span id="st-dentro">0</span><small>no local agora</small></div>
+            <div><span id="st-validos">0</span><small>presenças válidas</small></div>
+            <div><span id="st-total">0</span><small>leituras de entrada</small></div>
+          </div>
+          <h3>Movimentação recente</h3>
+          <ul id="log" class="log"></ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-alunos" class="tab">
+      <div class="grid-2">
+        <div class="card">
+          <h2>Cadastrar aluno</h2>
+          <form id="form-aluno" class="stack">
+            <label>RA <input name="ra" required inputmode="numeric" placeholder="202212345"></label>
+            <label>Nome completo <input name="nome" required placeholder="Nome do aluno"></label>
+            <label>Curso <input name="curso" placeholder="Engenharia de Computação"></label>
+            <button class="btn primary">Salvar</button>
+          </form>
+          <h3>Importar planilha</h3>
+          <p class="hint">Arquivo .xlsx ou .csv com colunas <b>RA</b>, <b>Nome</b> e (opcional) <b>Curso</b>.</p>
+          <input type="file" id="file-import" accept=".xlsx,.xls,.csv">
+        </div>
+        <div class="card">
+          <div class="row between">
+            <h2>Alunos cadastrados <span id="count-alunos" class="pill">0</span></h2>
+            <button id="btn-baixar-todos" class="btn">Baixar todos (.zip)</button>
+          </div>
+          <input id="busca" placeholder="Buscar por nome ou RA">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>QR</th><th>RA</th><th>Nome</th><th>Curso</th><th></th></tr></thead>
+              <tbody id="tb-alunos"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-relatorio" class="tab">
+      <div class="card">
+        <div class="row between">
+          <h2>Relatório de presença</h2>
+          <div class="row">
+            <button id="btn-fechar" class="btn" title="Registra saída agora para quem ainda está no local">Encerrar evento</button>
+            <button id="btn-export" class="btn primary">Exportar Excel</button>
+          </div>
+        </div>
+        <p class="hint">Presença válida quando a permanência for de pelo menos <b id="min-label">60</b> minutos.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>RA</th><th>Nome</th><th>Entrada</th><th>Saída</th><th>Permanência</th><th>Situação</th></tr></thead>
+            <tbody id="tb-relatorio"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-config" class="tab">
+      <div class="grid-2">
+        <div class="card">
+          <h2>Evento</h2>
+          <form id="form-config" class="stack">
+            <label>Nome do evento <input name="evento" required></label>
+            <label>Tempo mínimo (minutos) <input name="minimo" type="number" min="1" required></label>
+            <button class="btn primary">Salvar</button>
+          </form>
+        </div>
+        <div class="card">
+          <h2>Dados</h2>
+          <p class="hint">Protótipo não salva dados.</p>
+          <div class="stack">
+            <button id="btn-demo" class="btn">Carregar dados de exemplo</button>
+            <button id="btn-backup" class="btn">Baixar backup (JSON)</button>
+            <label class="btn file-btn">Restaurar backup <input type="file" id="file-backup" accept=".json" hidden></label>
+            <button id="btn-limpar" class="btn danger">Apagar todos os dados</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/db.js"></script>
+  <script src="js/codigo.js"></script>
+  <script src="js/alunos.js"></script>
+  <script src="js/leitor.js"></script>
+  <script src="js/relatorio.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
