@@ -137,3 +137,19 @@ td img { width: 44px; height: 44px; display: block; background: #fff; border-rad
 }
 .dialog::backdrop { background: rgba(0, 0, 0, .45); }
 .row.end { justify-content: flex-end; }
+
+.aviso-leitura {
+  position: fixed; inset: 0; z-index: 20;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; padding: 24px; text-align: center; color: #fff; cursor: pointer;
+  animation: aparecer .15s ease-out;
+}
+.aviso-leitura[hidden] { display: none; }
+.aviso-leitura.entrada { background: #1a7f45; }
+.aviso-leitura.saida { background: #0b5cad; }
+.aviso-leitura.aviso { background: #b7791f; }
+.aviso-leitura.erro { background: #b42318; }
+.al-tipo { font-size: clamp(2.5rem, 10vw, 5rem); font-weight: 800; letter-spacing: .04em; }
+.al-nome { font-size: clamp(1.4rem, 5vw, 2.4rem); font-weight: 700; }
+.al-detalhe { font-size: clamp(1rem, 3.5vw, 1.4rem); opacity: .9; }
+@keyframes aparecer { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: none; } }

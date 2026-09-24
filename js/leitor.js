@@ -3,16 +3,27 @@ const Leitor = (() => {
   const ultimas = new Map();
   let camera;
 
-  async function registrar(texto) {
-    const lido = Codigo.ler(texto);
-    if (lido.erro) return mostrar('erro', lido.erro, 'Peça para o aluno conferir o código.');
+  const DURACAO_AVISO = 2000;
+  let timerAviso;
 
+  async function registrar(texto, manual = false) {
+    if (!manual && avisoAberto()) return;
+    const lido = Codigo.ler(texto);
+    const chave = lido.ra ?? String(texto).trim();
     const agora = Date.now();
-    if (agora - (ultimas.get(lido.ra) || 0) < INTERVALO_REPETIDA) return;
-    ultimas.set(lido.ra, agora);
+    if (!manual && agora - (ultimas.get(chave) || 0) < INTERVALO_REPETIDA) return;
+    ultimas.set(chave, agora);
+
+    if (lido.erro) {
+      mostrar('erro', lido.erro, 'Peça para o aluno conferir o código.');
+      return avisar('erro', 'CÓDIGO INVÁLIDO', lido.erro, 'Peça para o aluno conferir o código.');
+    }
 
     const aluno = Alunos.buscar(lido.ra);
-    if (!aluno) return mostrar('erro', 'Aluno não cadastrado', `RA ${lido.ra} não está na lista do evento.`);
+    if (!aluno) {
+      mostrar('erro', 'Aluno não cadastrado', `RA ${lido.ra} não está na lista do evento.`);
+      return avisar('erro', 'NÃO CADASTRADO', `RA ${lido.ra}`, 'Aluno não está na lista do evento.');
+    }
 
     const { evento, minimo } = Config.get();
     const registros = await DB.todos('registros');
@@ -21,14 +32,17 @@ const Leitor = (() => {
 
     if (!aberto) {
       await DB.salvar('registros', { ra: aluno.ra, evento, entrada: iso, saida: null });
-      mostrar('entrada', `Entrada: ${aluno.nome}`, `RA ${aluno.ra} · ${Fmt.hora(iso)}`);
+      const detalhe = `RA ${aluno.ra} · ${Fmt.hora(iso)}`;
+      mostrar('entrada', `Entrada: ${aluno.nome}`, detalhe);
+      avisar('entrada', 'ENTRADA', aluno.nome, detalhe);
     } else {
       aberto.saida = iso;
       await DB.salvar('registros', aberto);
       const min = Fmt.minutos(aberto.entrada, iso);
       const valida = min >= minimo;
-      mostrar(valida ? 'saida' : 'aviso', `Saída: ${aluno.nome}`,
-        `Permanência de ${Fmt.duracao(min)}, ${valida ? 'presença VÁLIDA' : `abaixo de ${minimo} min`}`);
+      const detalhe = `Permanência de ${Fmt.duracao(min)}, ${valida ? 'presença válida' : `abaixo de ${minimo} min`}`;
+      mostrar(valida ? 'saida' : 'aviso', `Saída: ${aluno.nome}`, detalhe);
+      avisar(valida ? 'saida' : 'aviso', 'SAÍDA', aluno.nome, detalhe);
     }
     bip(aberto ? 660 : 880);
     await atualizarPainel();
@@ -39,6 +53,26 @@ const Leitor = (() => {
     el.className = `feedback ${tipo}`;
     el.innerHTML = `<div class="fb-title">${Fmt.esc(titulo)}</div><div class="fb-detail">${Fmt.esc(detalhe)}</div>`;
     if (tipo === 'erro') bip(220);
+  }
+
+  function avisar(tipo, rotulo, nome, detalhe) {
+    const el = document.getElementById('aviso-leitura');
+    el.className = `aviso-leitura ${tipo}`;
+    el.querySelector('.al-tipo').textContent = rotulo;
+    el.querySelector('.al-nome').textContent = nome;
+    el.querySelector('.al-detalhe').textContent = detalhe;
+    el.hidden = false;
+    clearTimeout(timerAviso);
+    timerAviso = setTimeout(fecharAviso, DURACAO_AVISO);
+  }
+
+  function fecharAviso() {
+    clearTimeout(timerAviso);
+    document.getElementById('aviso-leitura').hidden = true;
+  }
+
+  function avisoAberto() {
+    return !document.getElementById('aviso-leitura').hidden;
   }
 
   function bip(freq) {
@@ -75,7 +109,7 @@ const Leitor = (() => {
     if (!window.Html5Qrcode) return mostrar('erro', 'Leitor indisponível', 'Verifique a conexão com a internet.');
     camera = new Html5Qrcode('reader');
     try {
-      await camera.start({ facingMode: 'environment' }, { fps: 10, qrbox: 240 }, registrar, () => {});
+      await camera.start({ facingMode: 'environment' }, { fps: 10, qrbox: 240 }, (texto) => registrar(texto), () => {});
       document.getElementById('btn-camera').hidden = true;
       document.getElementById('btn-camera-stop').hidden = false;
     } catch (err) {
@@ -91,12 +125,13 @@ const Leitor = (() => {
 
   function iniciar() {
     document.getElementById('btn-camera').addEventListener('click', ligarCamera);
+    document.getElementById('aviso-leitura').addEventListener('click', fecharAviso);
     document.getElementById('btn-camera-stop').addEventListener('click', desligarCamera);
     document.getElementById('form-manual').addEventListener('submit', async (e) => {
       e.preventDefault();
       const campo = document.getElementById('manual-code');
-      ultimas.delete(Codigo.ler(campo.value).ra); 
-      await registrar(campo.value);
+      fecharAviso();
+      await registrar(campo.value, true);
       campo.value = '';
       campo.focus();
     });
