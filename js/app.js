@@ -1,33 +1,83 @@
 (async () => {
-  const abas = document.querySelectorAll('.tabs button');
+  const el = (id) => document.getElementById(id);
+  const dlgAjustes = el('dlg-ajustes');
+  const abas = document.querySelectorAll('.abas button');
+  let abaAtual = 'evento';
+
+  el('splash').addEventListener('animationend', (e) => e.target.remove());
+
+  async function renderAba() {
+    if (abaAtual === 'evento') await renderEventos();
+    if (abaAtual === 'relatorio') await Relatorio.render();
+    if (abaAtual === 'alunos') {
+      await Ui.lib('qr').catch(() => {});
+      Alunos.render();
+    }
+  }
+
   abas.forEach((b) => b.addEventListener('click', async () => {
-    abas.forEach((x) => x.classList.toggle('active', x === b));
-    document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.id === `tab-${b.dataset.tab}`));
-    if (b.dataset.tab !== 'leitura') Leitor.desligarCamera();
-    if (b.dataset.tab === 'relatorio') await Relatorio.render();
+    abaAtual = b.dataset.tab;
+    abas.forEach((x) => {
+      x.classList.toggle('active', x === b);
+      x.setAttribute('aria-selected', String(x === b));
+    });
+    document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.id === `tab-${abaAtual}`));
+    await renderAba();
   }));
+
+  el('btn-ajustes').addEventListener('click', async () => {
+    Leitor.desligarCamera();
+    await renderAba();
+    dlgAjustes.showModal();
+  });
+  dlgAjustes.addEventListener('close', () => Leitor.ligarCamera());
 
   function aplicarConfig() {
     const cfg = Config.get();
-    document.getElementById('evento-label').textContent = cfg.evento;
-    const f = document.getElementById('form-config');
+    el('evento-label').textContent = cfg.evento;
+    const f = el('form-config');
     f.evento.value = cfg.evento;
     f.minimo.value = cfg.minimo;
   }
 
-  document.getElementById('form-config').addEventListener('submit', async (e) => {
+  async function renderEventos() {
+    const atual = Config.get().evento;
+    const entradas = new Map([[atual, 0]]);
+    (await DB.todos('registros')).forEach((r) => entradas.set(r.evento, (entradas.get(r.evento) || 0) + 1));
+    el('lista-eventos').innerHTML = [...entradas].map(([nome, n]) => `
+      <li><button class="evento-item" data-evento="${Fmt.esc(nome)}"${nome === atual ? ' aria-current="true"' : ''}>
+        <span>${Fmt.esc(nome)}</span><small>${n} ${n === 1 ? 'entrada' : 'entradas'}</small>
+      </button></li>`).join('');
+  }
+
+  el('lista-eventos').addEventListener('click', async (e) => {
+    const botao = e.target.closest('[data-evento]');
+    if (!botao) return;
+    const evento = botao.dataset.evento;
+    Config.set({ ...Config.get(), evento });
+    aplicarConfig();
+    await atualizarTudo();
+    Ui.status(`Evento atual: ${evento}`);
+  });
+
+  el('form-config').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = e.target;
     Config.set({ evento: f.evento.value.trim(), minimo: Math.max(1, parseInt(f.minimo.value, 10) || 60) });
     aplicarConfig();
     await atualizarTudo();
-    alert('Configurações salvas.');
+    Ui.status('Configurações salvas.');
   });
 
-  document.getElementById('btn-demo').addEventListener('click', async () => {
-    if (!confirm('Isso substitui os registros de leitura atuais pelos de exemplo. Continuar?')) return;
+  el('btn-demo').addEventListener('click', async () => {
+    const ok = await Ui.confirmar({
+      titulo: 'Carregar dados de exemplo?',
+      texto: 'Isso substitui os registros de leitura atuais pelos de exemplo.',
+      acao: 'Carregar',
+    });
+    if (!ok) return;
     await carregarExemplo();
-    alert('Dados de exemplo carregados.');
+    Ui.status('Dados de exemplo carregados.');
   });
 
   async function carregarExemplo() {
@@ -56,14 +106,14 @@
     await atualizarTudo();
   }
 
-  const dlgDemo = document.getElementById('dlg-demo');
-  document.getElementById('dlg-demo-nao').addEventListener('click', () => dlgDemo.close());
-  document.getElementById('dlg-demo-sim').addEventListener('click', async () => {
+  const dlgDemo = el('dlg-demo');
+  el('dlg-demo-nao').addEventListener('click', () => dlgDemo.close());
+  el('dlg-demo-sim').addEventListener('click', async () => {
     dlgDemo.close();
     await carregarExemplo();
   });
 
-  document.getElementById('btn-backup').addEventListener('click', async () => {
+  el('btn-backup').addEventListener('click', async () => {
     const dados = { alunos: await DB.todos('alunos'), registros: await DB.todos('registros'), config: Config.get() };
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' }));
@@ -71,7 +121,7 @@
     a.click();
   });
 
-  document.getElementById('file-backup').addEventListener('change', async (e) => {
+  el('file-backup').addEventListener('change', async (e) => {
     const arq = e.target.files[0];
     if (!arq) return;
     try {
@@ -81,30 +131,38 @@
       if (dados.config) Config.set(dados.config);
       aplicarConfig();
       await atualizarTudo();
-      alert('Backup restaurado.');
+      Ui.status('Backup restaurado.');
     } catch {
-      alert('Arquivo de backup inválido.');
+      Ui.status('Arquivo de backup inválido.');
     }
     e.target.value = '';
   });
 
-  document.getElementById('btn-limpar').addEventListener('click', async () => {
-    if (!confirm('Apagar TODOS os alunos e registros deste aparelho?')) return;
+  el('btn-limpar').addEventListener('click', async () => {
+    const ok = await Ui.confirmar({
+      titulo: 'Apagar todos os dados?',
+      texto: 'Todos os alunos e registros deste aparelho serão apagados. Isso não pode ser desfeito.',
+      acao: 'Apagar tudo',
+      perigo: true,
+    });
+    if (!ok) return;
     await DB.limpar('alunos');
     await DB.limpar('registros');
     await atualizarTudo();
+    Ui.status('Dados apagados.');
   });
 
   async function atualizarTudo() {
     await Alunos.carregar();
     await Leitor.atualizarPainel();
-    await Relatorio.render();
+    if (dlgAjustes.open) await renderAba();
   }
 
   Alunos.iniciar();
-  Leitor.iniciar();
   Relatorio.iniciar();
   aplicarConfig();
   await atualizarTudo();
+  Leitor.iniciar();
   if (!Alunos.lista.length) dlgDemo.showModal();
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();

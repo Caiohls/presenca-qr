@@ -30,14 +30,15 @@ const Relatorio = (() => {
       <tr>
         <td>${Fmt.esc(l.ra)}</td>
         <td>${Fmt.esc(l.nome)}</td>
-        <td>${Fmt.hora(l.entrada)}</td>
-        <td>${Fmt.hora(l.saida)}</td>
-        <td>${Fmt.duracao(l.minutos)}</td>
+        <td data-l="Entrada">${Fmt.hora(l.entrada)}</td>
+        <td data-l="Saída">${Fmt.hora(l.saida)}</td>
+        <td data-l="Permanência">${Fmt.duracao(l.minutos)}</td>
         <td><span class="tag ${classe[l.situacao]}">${l.situacao}</span></td>
       </tr>`).join('') || '<tr><td colspan="6" class="hint">Sem dados.</td></tr>';
   }
 
   async function exportar() {
+    if (!(await Ui.exigirLib('xlsx'))) return;
     const { evento, minimo } = Config.get();
     const linhas = await consolidar();
     const presenca = linhas.map((l) => ({
@@ -75,12 +76,19 @@ const Relatorio = (() => {
   async function encerrar() {
     const { evento } = Config.get();
     const abertos = (await DB.todos('registros')).filter((r) => r.evento === evento && !r.saida);
-    if (!abertos.length) return alert('Ninguém está com entrada em aberto.');
-    if (!confirm(`Registrar saída agora para ${abertos.length} aluno(s)?`)) return;
+    if (!abertos.length) return Ui.status('Ninguém está com entrada em aberto.');
+    const ok = await Ui.confirmar({
+      titulo: 'Encerrar evento?',
+      texto: `Registrar saída agora para ${abertos.length} aluno(s).`,
+      acao: 'Encerrar',
+      perigo: true,
+    });
+    if (!ok) return;
     const agora = new Date().toISOString();
     await DB.salvarVarios('registros', abertos.map((r) => ({ ...r, saida: agora })));
     await render();
     await Leitor.atualizarPainel();
+    Ui.status(`Saída registrada para ${abertos.length} aluno(s).`);
   }
 
   function iniciar() {

@@ -8,12 +8,13 @@ const Alunos = (() => {
   }
 
   function render() {
+    document.getElementById('count-alunos').textContent = cache.length;
+    if (!document.getElementById('tab-alunos').classList.contains('active')) return;
     const termo = document.getElementById('busca').value.trim().toLowerCase();
     const lista = cache.filter((a) => !termo || a.nome.toLowerCase().includes(termo) || a.ra.includes(termo));
-    document.getElementById('count-alunos').textContent = cache.length;
     document.getElementById('tb-alunos').innerHTML = lista.map((a) => `
       <tr>
-        <td><img src="${Codigo.imagem(a.ra, 2)}" alt="QR de ${Fmt.esc(a.nome)}"></td>
+        <td>${window.qrcode ? `<img src="${Codigo.imagem(a.ra, 2)}" alt="QR de ${Fmt.esc(a.nome)}">` : ''}</td>
         <td>${Fmt.esc(a.ra)}</td>
         <td>${Fmt.esc(a.nome)}</td>
         <td>${Fmt.esc(a.curso)}</td>
@@ -87,12 +88,12 @@ const Alunos = (() => {
 
   async function baixar(ra) {
     const aluno = buscar(ra);
-    if (aluno) salvarArquivo(await gerarPng(aluno), nomeArquivo(aluno));
+    if (aluno && await Ui.exigirLib('qr')) salvarArquivo(await gerarPng(aluno), nomeArquivo(aluno));
   }
 
   async function baixarTodos() {
-    if (!cache.length) return alert('Nenhum aluno cadastrado.');
-    if (!window.JSZip) return alert('Não foi possível gerar o .zip. Verifique a conexão com a internet.');
+    if (!cache.length) return Ui.status('Nenhum aluno cadastrado.');
+    if (!(await Ui.exigirLib('qr')) || !(await Ui.exigirLib('zip'))) return;
     const zip = new JSZip();
     for (const a of cache) zip.file(nomeArquivo(a), await gerarPng(a));
     salvarArquivo(await zip.generateAsync({ type: 'blob' }), 'qrcodes_alunos.zip');
@@ -110,13 +111,17 @@ const Alunos = (() => {
         f.reset();
         f.ra.focus();
         await carregar();
+        await Leitor.atualizarPainel();
       }
     });
     document.getElementById('file-import').addEventListener('change', async (e) => {
       const arq = e.target.files[0];
       if (!arq) return;
-      const r = await importar(arq);
-      alert(`${r.ok} de ${r.total} alunos importados.`);
+      if (await Ui.exigirLib('xlsx')) {
+        const r = await importar(arq);
+        await Leitor.atualizarPainel();
+        Ui.status(`${r.ok} de ${r.total} alunos importados.`);
+      }
       e.target.value = '';
     });
     document.getElementById('busca').addEventListener('input', render);
@@ -124,12 +129,13 @@ const Alunos = (() => {
     document.getElementById('tb-alunos').addEventListener('click', async (e) => {
       if (e.target.dataset.baixar) return baixar(e.target.dataset.baixar);
       const ra = e.target.dataset.remover;
-      if (ra && confirm(`Remover o aluno RA ${ra}?`)) {
+      if (ra && await Ui.confirmar({ titulo: 'Remover aluno?', texto: `RA ${ra}`, acao: 'Remover', perigo: true })) {
         await DB.remover('alunos', ra);
         await carregar();
+        await Leitor.atualizarPainel();
       }
     });
   }
 
-  return { iniciar, carregar, salvar, buscar, get lista() { return cache; } };
+  return { iniciar, carregar, render, salvar, buscar, get lista() { return cache; } };
 })();
