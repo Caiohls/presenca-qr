@@ -2,122 +2,161 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Presença QR | USF</title>
-  <meta name="description" content="Protótipo de controle de presença por QR Code para atividades acadêmicas.">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#090A0F">
+  <title>PulseScan</title>
+  <meta name="description" content="Leitura de presença por QR Code para eventos acadêmicos.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/logo.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="stylesheet" href="css/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@5.2.8/wght.css" media="print" onload="this.media='all'">
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <div>
-        <h1>Presença QR</h1>
-        <p class="sub" id="evento-label">Evento</p>
-      </div>
+  <div id="splash" class="splash" aria-hidden="true">
+    <svg class="logo" viewBox="0 0 32 32" width="72" height="72" fill="none">
+      <path d="M4 10h8.5M19.5 10H28M4 22h8.5M19.5 22H28" stroke="#fff" stroke-width="2.5"/>
+      <circle cx="16" cy="16" r="3" fill="#fff"/>
+    </svg>
+  </div>
+
+  <main class="leitor">
+    <div id="cobertura" class="cobertura"><div id="reader"></div></div>
+  </main>
+
+  <div id="mira" class="mira" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  <div id="flash" class="flash" aria-hidden="true"></div>
+
+  <div id="camera-status" class="camera-status">
+    <p id="camera-msg">Iniciando câmera…</p>
+    <button id="btn-camera" class="btn primary" hidden>Tentar novamente</button>
+  </div>
+  <p id="dica-som" class="dica" hidden>Toque na tela para ativar som e vibração</p>
+
+  <header class="barra">
+    <span id="rede" class="rede" role="img"></span>
+    <p id="evento-label" class="barra-evento"></p>
+    <div class="contador">
+      <span id="contador-sr" class="sr" role="status"></span>
+      <span id="contador-presentes" class="od" aria-hidden="true"></span>
+      <span id="contador-total" class="contador-total" aria-hidden="true"></span>
     </div>
-    <nav class="tabs" role="tablist">
-      <button role="tab" data-tab="leitura" class="active">Leitura</button>
-      <button role="tab" data-tab="alunos">Alunos</button>
-      <button role="tab" data-tab="relatorio">Relatório</button>
-      <button role="tab" data-tab="config">Configurações</button>
-    </nav>
+    <button id="btn-ajustes" class="icone" aria-label="Ajustes">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>
+      </svg>
+    </button>
   </header>
 
-  <main>
-    <section id="tab-leitura" class="tab active">
-      <div class="grid-2">
-        <div class="card">
-          <h2>Leitor</h2>
-          <div id="reader" class="reader"></div>
-          <div class="row">
-            <button id="btn-camera" class="btn primary">Ligar câmera</button>
-            <button id="btn-camera-stop" class="btn" hidden>Desligar</button>
+  <section id="painel" class="painel" aria-label="Últimas leituras">
+    <div id="aviso-leitura" class="aviso-leitura" role="status">
+      <div class="al-tipo"></div>
+      <div class="al-nome"></div>
+      <div class="al-detalhe"></div>
+    </div>
+    <button id="painel-alca" class="painel-alca" aria-expanded="true" aria-controls="painel-corpo">
+      <span>Últimas leituras</span>
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <div id="painel-corpo">
+      <ul id="log" class="log"></ul>
+      <form id="form-manual" class="manual">
+        <input id="manual-code" placeholder="RA ou leitor USB" aria-label="Digite o RA do aluno ou use um leitor USB" autocomplete="off" inputmode="numeric">
+        <button class="btn">Registrar</button>
+      </form>
+    </div>
+  </section>
+
+  <dialog id="dlg-ajustes" class="ajustes" aria-labelledby="ajustes-titulo">
+    <header class="ajustes-topo">
+      <h1 id="ajustes-titulo">Ajustes</h1>
+      <form method="dialog">
+        <button class="icone" aria-label="Fechar ajustes e voltar à leitura">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </form>
+    </header>
+    <nav class="abas" role="tablist">
+      <button role="tab" data-tab="evento" class="active" aria-selected="true">Evento</button>
+      <button role="tab" data-tab="alunos" aria-selected="false">Alunos</button>
+      <button role="tab" data-tab="relatorio" aria-selected="false">Relatório</button>
+      <button role="tab" data-tab="dados" aria-selected="false">Dados</button>
+    </nav>
+
+    <div class="ajustes-corpo">
+      <section id="tab-evento" class="tab active">
+        <div class="grid-2">
+          <div class="card">
+            <h2>Evento atual</h2>
+            <form id="form-config" class="stack">
+              <label>Nome do evento <input name="evento" required></label>
+              <label>Tempo mínimo (minutos) <input name="minimo" type="number" min="1" required></label>
+              <p class="hint">Um nome novo inicia um evento sem leituras. As leituras dos outros eventos continuam guardadas.</p>
+              <button class="btn primary">Salvar</button>
+            </form>
           </div>
-          <form id="form-manual" class="row">
-            <input id="manual-code" placeholder="Digite o RA ou use leitor USB" autocomplete="off" inputmode="numeric">
-            <button class="btn">Registrar</button>
-          </form>
+          <div class="card">
+            <h2>Trocar de evento</h2>
+            <ul id="lista-eventos" class="eventos"></ul>
+            <h3>Encerrar</h3>
+            <p class="hint">Registra a saída agora para quem ainda está no local.</p>
+            <button id="btn-fechar" class="btn danger">Encerrar evento</button>
+          </div>
         </div>
+      </section>
+
+      <section id="tab-alunos" class="tab">
+        <div class="grid-2">
+          <div class="card">
+            <h2>Cadastrar aluno</h2>
+            <form id="form-aluno" class="stack">
+              <label>RA <input name="ra" required inputmode="numeric" placeholder="202212345"></label>
+              <label>Nome completo <input name="nome" required placeholder="Nome do aluno"></label>
+              <label>Curso <input name="curso" placeholder="Engenharia de Computação"></label>
+              <button class="btn primary">Salvar</button>
+            </form>
+            <h3>Importar planilha</h3>
+            <p class="hint">Arquivo .xlsx ou .csv com colunas <b>RA</b>, <b>Nome</b> e (opcional) <b>Curso</b>.</p>
+            <label class="btn file-btn">Selecionar arquivo <input type="file" id="file-import" accept=".xlsx,.xls,.csv" hidden></label>
+          </div>
+          <div class="card">
+            <div class="row between">
+              <h2>Alunos cadastrados <span id="count-alunos" class="pill">0</span></h2>
+              <button id="btn-baixar-todos" class="btn">Baixar todos (.zip)</button>
+            </div>
+            <input id="busca" placeholder="Buscar por nome ou RA" aria-label="Buscar por nome ou RA">
+            <div class="table-wrap">
+              <table class="t-alunos">
+                <thead><tr><th>QR</th><th>RA</th><th>Nome</th><th>Curso</th><th></th></tr></thead>
+                <tbody id="tb-alunos"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-relatorio" class="tab">
         <div class="card">
-          <h2>Última leitura</h2>
-          <div id="feedback" class="feedback idle">
-            <div class="fb-title">Aguardando leitura</div>
-            <div class="fb-detail">Aponte o QR Code do aluno para a câmera.</div>
+          <div class="row between">
+            <h2>Relatório de presença</h2>
+            <button id="btn-export" class="btn primary">Exportar Excel</button>
           </div>
           <div class="stats">
             <div><span id="st-dentro">0</span><small>no local agora</small></div>
             <div><span id="st-validos">0</span><small>presenças válidas</small></div>
             <div><span id="st-total">0</span><small>leituras de entrada</small></div>
           </div>
-          <h3>Movimentação recente</h3>
-          <ul id="log" class="log"></ul>
-        </div>
-      </div>
-    </section>
-
-    <section id="tab-alunos" class="tab">
-      <div class="grid-2">
-        <div class="card">
-          <h2>Cadastrar aluno</h2>
-          <form id="form-aluno" class="stack">
-            <label>RA <input name="ra" required inputmode="numeric" placeholder="202212345"></label>
-            <label>Nome completo <input name="nome" required placeholder="Nome do aluno"></label>
-            <label>Curso <input name="curso" placeholder="Engenharia de Computação"></label>
-            <button class="btn primary">Salvar</button>
-          </form>
-          <h3>Importar planilha</h3>
-          <p class="hint">Arquivo .xlsx ou .csv com colunas <b>RA</b>, <b>Nome</b> e (opcional) <b>Curso</b>.</p>
-          <input type="file" id="file-import" accept=".xlsx,.xls,.csv">
-        </div>
-        <div class="card">
-          <div class="row between">
-            <h2>Alunos cadastrados <span id="count-alunos" class="pill">0</span></h2>
-            <button id="btn-baixar-todos" class="btn">Baixar todos (.zip)</button>
-          </div>
-          <input id="busca" placeholder="Buscar por nome ou RA">
+          <p class="hint">Presença válida quando a permanência for de pelo menos <b id="min-label">60</b> minutos.</p>
           <div class="table-wrap">
-            <table>
-              <thead><tr><th>QR</th><th>RA</th><th>Nome</th><th>Curso</th><th></th></tr></thead>
-              <tbody id="tb-alunos"></tbody>
+            <table class="t-relatorio">
+              <thead><tr><th>RA</th><th>Nome</th><th>Entrada</th><th>Saída</th><th>Permanência</th><th>Situação</th></tr></thead>
+              <tbody id="tb-relatorio"></tbody>
             </table>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section id="tab-relatorio" class="tab">
-      <div class="card">
-        <div class="row between">
-          <h2>Relatório de presença</h2>
-          <div class="row">
-            <button id="btn-fechar" class="btn" title="Registra saída agora para quem ainda está no local">Encerrar evento</button>
-            <button id="btn-export" class="btn primary">Exportar Excel</button>
-          </div>
-        </div>
-        <p class="hint">Presença válida quando a permanência for de pelo menos <b id="min-label">60</b> minutos.</p>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>RA</th><th>Nome</th><th>Entrada</th><th>Saída</th><th>Permanência</th><th>Situação</th></tr></thead>
-            <tbody id="tb-relatorio"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <section id="tab-config" class="tab">
-      <div class="grid-2">
-        <div class="card">
-          <h2>Evento</h2>
-          <form id="form-config" class="stack">
-            <label>Nome do evento <input name="evento" required></label>
-            <label>Tempo mínimo (minutos) <input name="minimo" type="number" min="1" required></label>
-            <button class="btn primary">Salvar</button>
-          </form>
-        </div>
+      <section id="tab-dados" class="tab">
         <div class="card">
           <h2>Dados</h2>
           <p class="hint">Os dados ficam salvos só neste aparelho.</p>
@@ -128,15 +167,20 @@
             <button id="btn-limpar" class="btn danger">Apagar todos os dados</button>
           </div>
         </div>
-      </div>
-    </section>
-  </main>
+      </section>
+    </div>
 
-  <div id="aviso-leitura" class="aviso-leitura" hidden>
-    <div class="al-tipo"></div>
-    <div class="al-nome"></div>
-    <div class="al-detalhe"></div>
-  </div>
+    <div id="ajustes-status" class="ajustes-status" role="status"></div>
+  </dialog>
+
+  <dialog id="dlg-confirmar" class="dialog">
+    <h2 id="confirmar-titulo"></h2>
+    <p id="confirmar-texto" class="hint"></p>
+    <form method="dialog" class="row end">
+      <button value="nao" class="btn">Cancelar</button>
+      <button id="confirmar-acao" value="sim" class="btn primary">Confirmar</button>
+    </form>
+  </dialog>
 
   <dialog id="dlg-demo" class="dialog">
     <h2>Carregar dados de exemplo?</h2>
@@ -147,11 +191,12 @@
     </div>
   </dialog>
 
-  <script src="js/db.js"></script>
-  <script src="js/codigo.js"></script>
-  <script src="js/alunos.js"></script>
-  <script src="js/leitor.js"></script>
-  <script src="js/relatorio.js"></script>
-  <script src="js/app.js"></script>
+  <script defer src="js/db.js"></script>
+  <script defer src="js/codigo.js"></script>
+  <script defer src="js/ui.js"></script>
+  <script defer src="js/alunos.js"></script>
+  <script defer src="js/leitor.js"></script>
+  <script defer src="js/relatorio.js"></script>
+  <script defer src="js/app.js"></script>
 </body>
 </html>
